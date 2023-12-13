@@ -2,7 +2,7 @@ library(tidymodels)
 library(embed)
 library(vroom)
 library(tidyverse)
-library(glmnet)
+
 
 acs_train <- vroom('C:/BYU/2023(5) Fall/STAT 348/Allstate-Claims-Severity/train.csv',
                    show_col_types = FALSE) %>%
@@ -22,37 +22,21 @@ my_recipe <- recipe(loss ~ ., acs_train) %>%
   step_unknown(all_nominal_predictors()) %>%
   step_dummy(all_nominal_predictors()) 
 
-prepped_recipe <- prep(my_recipe)
-baked <- bake(prepped_recipe, new_data = acs_train)
-
-preg_model <- linear_reg(penalty=tune(), mixture=tune()) %>%
-  set_engine("glmnet")
+preg_model <- linear_reg() %>%
+  set_engine("lm")
 
 preg_wf <- workflow() %>%
   add_recipe(my_recipe) %>%
-  add_model(preg_model)  
+  add_model(preg_model) %>%
+  fit(acs_train) 
 
-tuning_grid <- grid_regular(penalty(),mixture(), levels = 3)
+preg_Wf%>%
+  predict(new_data = acs_test)
 
-folds <- vfold_cv(acs_train, v = 5, repeats =1)
-
-CV_results <- preg_wf %>%
-  tune_grid(resamples=folds,
-            grid=tuning_grid,
-            metrics=metric_set(mae))
-
-bestTune <- CV_results %>%
-  select_best("mae")
-
-final_wf <- preg_wf %>%
-  finalize_workflow(bestTune) %>%
-  fit(data = acs_train)
-
-final_wf %>% 
-  predict(new_data = acs_train)
-
-Sub1 <- final_wf %>%
+Sub1 <- preg_wf %>%
   bind_cols(acs_test) %>%
   select(id,.pred) %>%
   rename(loss = .pred) %>%
-  mutate(loss = exp(loss)
+  mutate(loss = exp(loss))
+
+vroom_write(Sub1, file= './submission.csv', delim=',')
